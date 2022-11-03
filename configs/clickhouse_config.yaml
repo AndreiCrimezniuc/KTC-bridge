@@ -1,0 +1,2 @@
+retryTimeout: 2s
+database: default

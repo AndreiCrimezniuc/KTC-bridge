@@ -1,0 +1,102 @@
+---
+version: '3.3'
+services:
+  linux_machine:
+    build: tools/centos7
+    container_name: linux_machine
+    volumes:
+      - ${HOME}/projects/Core:${HOME}/projects/Core
+  zookeeper:
+    image: confluentinc/cp-zookeeper
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      core_default:
+        ipv4_address: 172.28.0.4
+    volumes:
+      - ./internal/docker/zookeeper/data:/var/lib/zookeeper/data
+      - ./internal/docker/zookeeper/log:/var/lib/zookeeper/log
+      - ./internal/docker/zookeeper/secrets:/etc/zookeeper/secrets
+  broker:
+    image: confluentinc/cp-kafka
+    container_name: broker
+    ports:
+      # To learn about configuring Kafka for access across networks see
+      # https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc/
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    restart: always
+    volumes:
+      - ./internal/docker/kafka/data:/var/lib/kafka/data
+      - ./internal/docker/kafka/secrets:/etc/kafka/secrets
+    networks:
+      core_default:
+        ipv4_address: 172.28.0.5
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://broker:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+  ch_server:
+    image: yandex/clickhouse-server
+    container_name: ch_server
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - ./internal/docker/clickhouse/data:/var/lib/clickhouse
+      - ./internal/docker/clickhouse/init:/docker-entrypoint-initdb.d
+    networks:
+      core_default:
+        ipv4_address: 172.28.0.3
+  ch_client:
+    image: yandex/clickhouse-client
+    container_name: ch_client
+    entrypoint:
+      - /bin/sleep
+    command:
+      - infinity
+    networks:
+      core_default:
+        ipv4_address: 172.28.0.2
+  go:
+    image: golang:1.19
+    container_name: go_server
+    depends_on:
+      - ch_server
+      - ch_client
+      - broker
+    working_dir: /go/src/app
+    volumes:
+        - .:/go/src/app
+    networks:
+      core_default:
+        ipv4_address: 172.28.0.6
+
+  centos7:
+    image: centos:7
+    container_name: centos7
+    working_dir: /app
+    volumes:
+      - .:/app
+
+
+  redhat9:
+    image: redhat:9
+    container_name: redhat9
+    working_dir: /app
+    volumes:
+      - .:/app
+
+
+networks:
+  core_default:
+    ipam:
+     config:
+       - subnet: 172.28.0.0/24

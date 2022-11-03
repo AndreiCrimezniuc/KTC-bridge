@@ -1,0 +1,12 @@
+probes:
+  pp1: "md"
+  pp2: "md"
+  Gi_TOD: "ro"
+  Gi_TOD2: "ro"
+files:
+  topic: [0]
+  ftpsession: [0,1]
+groupId: "cust"
+chunkSize: 10000
+timeToFetch: 5s
+retryBeforeWriteTheTail: 2
